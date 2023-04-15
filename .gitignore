@@ -65,6 +65,7 @@ test/types/index.js
 dist
 
 # docker
+docker-compose.yml
 docker-entrypoint-initdb.d
 pgdata
 
