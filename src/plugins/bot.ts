@@ -23,6 +23,7 @@ export default fp<
     if (process.env.NODE_ENV == 'prod') {
       bot = new Telegraf(opts.telegramToken);
       const webhook = await bot.createWebhook({ domain: opts.webhookDomain });
+      console.log('path: ', bot.secretPathComponent());
       fastify.post(bot.secretPathComponent(), (req, rep) => webhook(req.raw, rep.raw));
     } else {
       bot = new Telegraf(opts.testTelegramToken);
