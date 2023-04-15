@@ -22,7 +22,7 @@ export default fp<
   fastify.register(async (fastify, opts, done) => {
     let bot: Telegraf;
     if (process.env.NODE_ENV == 'prod') {
-      bot = new Telegraf(opts.telegramToken);
+      bot = new Telegraf(opts.telegramToken, { telegram: { webhookReply: true } });
       const webhook = await bot.createWebhook({ domain: opts.webhookDomain });
       fastify.post(`/telegraf/${bot.secretPathComponent()}`, (req, rep) => {
         webhook(req.raw, rep.raw);
@@ -51,9 +51,9 @@ export default fp<
         if (!assistant) {
           assistant = await fastify.prisma.user.create({
             data: {
-              telegramId,
-              telegramName,
-              telegramUsername,
+              telegramId: 0,
+              telegramName: 'nika-gpt-assistant',
+              telegramUsername: 'nika-gpt-assistant',
               roles: { connect: { key: 'assistant' } },
             },
           });
