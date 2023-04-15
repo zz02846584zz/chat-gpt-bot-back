@@ -24,7 +24,7 @@ export default fp<
     let bot: Telegraf;
     if (process.env.NODE_ENV == 'prod') {
       bot = new Telegraf(opts.telegramToken);
-      createServer(await bot.createWebhook({ domain: opts.webhookDomain })).listen(opts.telegramBotPort);
+      await bot.createWebhook({ domain: opts.webhookDomain });
     } else {
       bot = new Telegraf(opts.testTelegramToken);
     }
