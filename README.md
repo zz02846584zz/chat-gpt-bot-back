@@ -18,7 +18,7 @@ dev:
 # migrations
 
 1. npx prisma migrate dev - for dev
-2. npx prisma migrate prod - for prod
+2. npx prisma migrate deploy - for prod
 3. npx prisma migrate dev --name <name> - create new migration
 
 # git

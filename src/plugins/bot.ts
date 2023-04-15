@@ -5,6 +5,7 @@ import { options } from '../app';
 import { FastifyRegisterOptions } from 'fastify';
 import { User } from '@prisma/client';
 import * as crypto from 'node:crypto';
+import { createServer } from 'node:https';
 
 /**
  * Плагин для работы с телеграм ботом nika-gpt-bot
@@ -19,10 +20,11 @@ export default fp<
     telegramBotPort: string;
   }>
 >(async fastify => {
-  fastify.register((fastify, opts, done) => {
+  fastify.register(async (fastify, opts, done) => {
     let bot: Telegraf;
     if (process.env.NODE_ENV == 'prod') {
       bot = new Telegraf(opts.telegramToken);
+      createServer(await bot.createWebhook({ domain: opts.webhookDomain })).listen(opts.telegramBotPort);
     } else {
       bot = new Telegraf(opts.testTelegramToken);
     }
