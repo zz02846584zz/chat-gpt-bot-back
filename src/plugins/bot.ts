@@ -5,7 +5,6 @@ import { options } from '../app';
 import { FastifyRegisterOptions } from 'fastify';
 import { User } from '@prisma/client';
 import * as crypto from 'node:crypto';
-import { createServer } from 'node:https';
 
 /**
  * Плагин для работы с телеграм ботом nika-gpt-bot
