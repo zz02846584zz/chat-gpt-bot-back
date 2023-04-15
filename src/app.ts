@@ -4,14 +4,16 @@ import { FastifyPluginAsync } from 'fastify';
 
 import config from './config';
 import { FastifyEnvOptions } from '@fastify/env';
-const { telegramToken, webhookUrl } = config;
+const { telegramToken, webhookDomain, telegramBotPort, testTelegramToken } = config;
 
 export type AppOptions = {
   // Place your custom options for app below here.
   custom: {
     telegramBot: {
       telegramToken: string;
-      webhookUrl: string;
+      testTelegramToken: string;
+      webhookDomain: string;
+      telegramBotPort: string;
     };
     fastifyEnv: FastifyEnvOptions;
     openai: { apiKey: string };
@@ -22,13 +24,25 @@ export type AppOptions = {
 
 const schema = {
   type: 'object',
-  required: ['PORT', 'BOT_TOKEN', 'NODE_ENV', 'OPENAI_API_KEY'],
+  required: ['PORT', 'BOT_TOKEN', 'TEST_BOT_TOKEN', 'NODE_ENV', 'OPENAI_API_KEY', 'TELEGRAM_WEBHOOK_DOMAIN'],
   properties: {
     PORT: {
-      type: 'string',
+      type: 'number',
       default: 5100,
     },
+    TELEGRAM_BOT_PORT: {
+      type: 'number',
+      default: 5200,
+    },
     BOT_TOKEN: {
+      type: 'string',
+      default: '',
+    },
+    TELEGRAM_WEBHOOK_DOMAIN: {
+      type: 'string',
+      default: '',
+    },
+    TEST_BOT_TOKEN: {
       type: 'string',
       default: '',
     },
@@ -48,7 +62,9 @@ const options: AppOptions = {
     openai: { apiKey: process.env.OPENAI_API_KEY || '' },
     telegramBot: {
       telegramToken,
-      webhookUrl,
+      testTelegramToken,
+      webhookDomain,
+      telegramBotPort,
     },
     fastifyEnv: {
       confKey: 'config',

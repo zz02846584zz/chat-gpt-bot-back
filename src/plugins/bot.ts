@@ -1,19 +1,31 @@
-import { Update } from 'telegraf/typings/core/types/typegram';
 import fp from 'fastify-plugin';
 import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
 import { options } from '../app';
 import { FastifyRegisterOptions } from 'fastify';
 import { User } from '@prisma/client';
+import * as crypto from 'node:crypto';
 
 /**
  * Плагин для работы с телеграм ботом nika-gpt-bot
  *
  * @see later
  */
-export default fp<FastifyRegisterOptions<{ telegramToken: string; webhookUrl: string }>>(async fastify => {
+export default fp<
+  FastifyRegisterOptions<{
+    telegramToken: string;
+    webhookDomain: string;
+    testTelegramToken: string;
+    telegramBotPort: string;
+  }>
+>(async fastify => {
   fastify.register((fastify, opts, done) => {
-    const bot = new Telegraf(opts.telegramToken);
+    let bot: Telegraf;
+    if (process.env.NODE_ENV == 'prod') {
+      bot = new Telegraf(opts.telegramToken);
+    } else {
+      bot = new Telegraf(opts.testTelegramToken);
+    }
 
     bot.command('start', async ctx => {
       const telegramId = ctx.message?.from?.id;
@@ -51,6 +63,11 @@ export default fp<FastifyRegisterOptions<{ telegramToken: string; webhookUrl: st
       ctx.reply('Привет, это nika gpt bot!');
     });
 
+    bot.catch((err, ctx) => {
+      fastify.log.error(`Ooops, произошла ошибка для пользователя ${ctx.message?.from.id}`, err);
+      ctx.reply('Ooops, произошла ошибка!');
+    });
+
     bot.command('genimg', async ctx => {
       const text = ctx.message.text.trim();
       const candidate = await fastify.prisma.user.findFirst({
@@ -65,11 +82,6 @@ export default fp<FastifyRegisterOptions<{ telegramToken: string; webhookUrl: st
         `Сгенерировано новое изображение от <${candidate.telegramName}>: <${candidate.id}> - <${imgUrl}>`
       );
       ctx.replyWithPhoto(imgUrl);
-    });
-
-    bot.catch((err, ctx) => {
-      console.info(`Ooops, произошла ошибка для пользователя ${ctx.message?.from.id}`, err);
-      ctx.reply('Ooops, произошла ошибка!');
     });
 
     bot.on(message('text'), async ctx => {
@@ -88,6 +100,9 @@ export default fp<FastifyRegisterOptions<{ telegramToken: string; webhookUrl: st
       const messages = await fastify.prisma.message.findMany({
         where: { roomId },
         include: { user: { include: { roles: true } } },
+        orderBy: { createdAt: 'desc' },
+
+        take: 20,
       });
 
       const botReplyMessage = await fastify.sendChatGptMsg(
@@ -106,17 +121,18 @@ export default fp<FastifyRegisterOptions<{ telegramToken: string; webhookUrl: st
         ],
       });
 
-      fastify.log.info(`Новое сообщение от <${candidate.telegramName}>: <${candidate.id}> - <${newMsg}>`);
-
       await ctx.sendMessage(botReplyMessage, { reply_to_message_id: ctx.message.message_id });
+
+      fastify.log.info(`Новое сообщение от <${candidate.telegramName}>: <${candidate.id}> - <${newMsg}>`);
     });
 
     if (process.env.NODE_ENV === 'prod') {
-      bot.telegram.setWebhook(opts.webhookUrl);
-      fastify.post(`/webhook/${opts.telegramToken}`, async (request, reply) => {
-        const update = request.body as Update;
-        await bot.handleUpdate(update);
-        reply.send();
+      bot.launch({
+        webhook: {
+          domain: opts.webhookDomain,
+          port: +opts.telegramBotPort,
+          secretToken: crypto.randomBytes(64).toString('hex'),
+        },
       });
     } else {
       bot.launch();

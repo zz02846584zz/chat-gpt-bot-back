@@ -36,6 +36,14 @@ model Role {
   @@map("role")
 }
 
+// model Access {
+//   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+//   key role_key @unique
+//   value String
+//   users User[]
+//   @@map("access")
+// }
+
 model Room {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   users User[]
