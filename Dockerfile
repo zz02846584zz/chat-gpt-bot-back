@@ -1,5 +1,9 @@
-FROM postgres:14.5
+FROM node:16
 
 WORKDIR /
 
-COPY ./docker-entrypoint-initdb.d/* /docker-entrypoint-initdb.d/
+COPY package*.json ./
+
+RUN npm ci
+
+COPY . .

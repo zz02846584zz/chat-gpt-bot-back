@@ -68,6 +68,7 @@ dist
 docker-compose.yml
 docker-entrypoint-initdb.d
 pgdata
+docker
 
 # .env
 .env

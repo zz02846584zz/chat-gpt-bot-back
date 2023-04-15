@@ -2,7 +2,7 @@
 
 dev:
 
-1.  run command <npm ci --legacy-peer-deps>
+1.  run command <npm ci>
 2.  run command in root directory <cp .env.example .env>
 3.  set variables to .env (not required)
 4.  create folder in root directory docker-entrypoint-initdb.d
