@@ -5,6 +5,7 @@ import { options } from '../app';
 import { FastifyRegisterOptions } from 'fastify';
 import { User } from '@prisma/client';
 import * as crypto from 'node:crypto';
+import { Update } from 'telegraf/typings/core/types/typegram';
 
 /**
  * Плагин для работы с телеграм ботом nika-gpt-bot
@@ -21,16 +22,8 @@ export default fp<
 >(async fastify => {
   fastify.register(async (fastify, opts, done) => {
     let bot: Telegraf;
-    if (process.env.NODE_ENV == 'prod') {
-      bot = new Telegraf(opts.telegramToken);
-      // const webhook = await bot.createWebhook({ domain: opts.webhookDomain });
-      // fastify.post(`/telegraf/${bot.secretPathComponent()}`, (req, rep) => {
-      //   webhook(req.raw, rep.raw);
-      //   bot.handleUpdate(req.body as Update, rep.raw);
-      // });
-    } else {
-      bot = new Telegraf(opts.testTelegramToken);
-    }
+    if (process.env.NODE_ENV == 'prod') bot = new Telegraf(opts.telegramToken);
+    else bot = new Telegraf(opts.testTelegramToken);
 
     bot.command('start', async ctx => {
       const telegramId = ctx.message?.from?.id;
@@ -139,6 +132,9 @@ export default fp<
           domain: opts.webhookDomain,
           secretToken: crypto.randomBytes(64).toString('hex'),
         },
+      });
+      fastify.post(`/telegraf/${bot.secretPathComponent()}`, (req, rep) => {
+        bot.handleUpdate(req.body as Update, rep.raw);
       });
     }
 
