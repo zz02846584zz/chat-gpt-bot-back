@@ -20,10 +20,12 @@ export default fp<
 >(async fastify => {
   fastify.register(async (fastify, opts, done) => {
     let bot: Telegraf;
+    let secretPath: string = '';
     if (process.env.NODE_ENV == 'prod') {
       bot = new Telegraf(opts.telegramToken);
+      secretPath = bot.secretPathComponent();
       const webhook = await bot.createWebhook({ domain: opts.webhookDomain });
-      fastify.post(`/telegraf/${bot.secretPathComponent()}`, (req, rep) => webhook(req.raw, rep.raw));
+      fastify.post(`/telegraf/${secretPath}`, (req, rep) => webhook(req.raw, rep.raw));
     } else {
       bot = new Telegraf(opts.testTelegramToken);
     }
@@ -127,7 +129,11 @@ export default fp<
       fastify.log.info(`Новое сообщение от <${candidate.telegramName}>: <${candidate.id}> - <${newMsg}>`);
     });
 
-    if (process.env.NODE_ENV === 'dev') bot.launch();
+    if (process.env.NODE_ENV === 'dev') {
+      bot.launch();
+    } else {
+      bot.launch({ webhook: { hookPath: `/telegraf/${secretPath}`, domain: opts.webhookDomain } });
+    }
 
     done();
   }, options.custom.telegramBot);
