@@ -16,7 +16,7 @@ export default fp(async fastify => {
     const bot = new Telegraf(process.env.NODE_ENV == 'prod' ? opts.telegramToken : opts.testTelegramToken);
 
     bot.use(async (ctx, next) => {
-      const telegramId = ctx?.message?.from.id;
+      const telegramId = ctx?.message?.from?.id;
       if (!telegramId) return next();
       const candidate = await fastify.prisma.user.findFirst({
         where: { telegramId: ctx.message.from.id },
@@ -67,7 +67,7 @@ export default fp(async fastify => {
     });
 
     bot.catch((err, ctx) => {
-      fastify.log.error(`Ooops, произошла ошибка для пользователя ${ctx.message?.from.id} - ${err}`);
+      fastify.log.error(`Ooops, произошла ошибка для пользователя ${ctx.message?.from?.id} - ${err}`);
       ctx.reply('Ooops, произошла ошибка!');
     });
 
@@ -102,51 +102,53 @@ export default fp(async fastify => {
           },
         });
       }
-
-      const candidate = await fastify.prisma.user.findFirst({
-        where: { telegramId: ctx.message.from.id },
-        include: { rooms: true },
-      });
-
-      if (!candidate) return ctx.reply('Запустите бота командой /start и отправьте сообщение повторно');
-
-      const assistant = (await fastify.prisma.user.findFirst({
-        where: { roles: { every: { key: 'assistant' } } },
-      })) as User; // тут помощник точно есть, тк он создается при команде start
-      let roomId = candidate.rooms?.[0]?.id;
-      if (!roomId) {
-        const room = await fastify.prisma.room.create({
-          data: { users: { connect: [{ id: candidate.id }, { id: assistant.id }] } },
+      try {
+        const candidate = await fastify.prisma.user.findFirst({
+          where: { telegramId: ctx.message.from.id },
+          include: { rooms: true },
         });
-        roomId = room.id;
+
+        if (!candidate) return ctx.reply('Запустите бота командой /start и отправьте сообщение повторно');
+
+        const assistant = (await fastify.prisma.user.findFirst({
+          where: { roles: { every: { key: 'assistant' } } },
+        })) as User; // тут помощник точно есть, тк он создается при команде start
+        let roomId = candidate.rooms?.[0]?.id;
+        if (!roomId) {
+          const room = await fastify.prisma.room.create({
+            data: { users: { connect: [{ id: candidate.id }, { id: assistant.id }] } },
+          });
+          roomId = room.id;
+        }
+        const newMsg = ctx.message.text.trim();
+        const messages = await fastify.prisma.message.findMany({
+          where: { roomId },
+          include: { user: { include: { roles: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        });
+
+        const botReplyMessage = await fastify.sendChatGptMsg(
+          messages
+            .map(msg => {
+              const role = msg.user.roles[0].key === 'admin' ? 'user' : msg.user.roles[0].key;
+              return { content: msg.content, name: msg.userId, role };
+            })
+            .concat({ content: newMsg, role: 'user', name: candidate.id })
+        );
+
+        await fastify.prisma.message.createMany({
+          data: [
+            { roomId, content: newMsg, userId: candidate.id },
+            { roomId, content: botReplyMessage, userId: assistant.id },
+          ],
+        });
+
+        await ctx.sendMessage(botReplyMessage, { reply_to_message_id: ctx.message.message_id });
+        fastify.log.info(`Новое сообщение от <${candidate.telegramName}>: <${candidate.id}> - <${newMsg}>`);
+      } catch (error) {
+        fastify.log.error(`Произошла ошибка - <${error}>`);
       }
-      const newMsg = ctx.message.text.trim();
-      const messages = await fastify.prisma.message.findMany({
-        where: { roomId },
-        include: { user: { include: { roles: true } } },
-        orderBy: { createdAt: 'desc' },
-        take: 20,
-      });
-
-      const botReplyMessage = await fastify.sendChatGptMsg(
-        messages
-          .map(msg => {
-            const role = msg.user.roles[0].key === 'admin' ? 'user' : msg.user.roles[0].key;
-            return { content: msg.content, name: msg.userId, role };
-          })
-          .concat({ content: newMsg, role: 'user', name: candidate.id })
-      );
-
-      await fastify.prisma.message.createMany({
-        data: [
-          { roomId, content: newMsg, userId: candidate.id },
-          { roomId, content: botReplyMessage, userId: assistant.id },
-        ],
-      });
-
-      await ctx.sendMessage(botReplyMessage, { reply_to_message_id: ctx.message.message_id });
-
-      fastify.log.info(`Новое сообщение от <${candidate.telegramName}>: <${candidate.id}> - <${newMsg}>`);
     });
 
     if (process.env.NODE_ENV === 'dev') {

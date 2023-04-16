@@ -12,9 +12,14 @@ export default fp<FastifyRegisterOptions<{ apiKey: string }>>(async fastify => {
   async function sendChatGptMsg(messages: { role: 'user' | 'assistant'; content: string; name: string }[]) {
     const completions = await fastify.openai.createChatCompletion({
       model: 'gpt-3.5-turbo',
-      messages,
+      messages: [
+        {
+          role: 'system',
+          content: 'Тебя зовут Ника. Тебя создала и разработала команда NN Company',
+        },
+        ...messages,
+      ],
     });
-
     const message = completions?.data.choices[0].message?.content.trim();
     return message;
   }
