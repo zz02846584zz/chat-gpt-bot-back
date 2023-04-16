@@ -21,6 +21,8 @@ model User {
   rooms Room[]
   telegramId BigInt @unique
   telegramUsername String?
+  banned Boolean @default(false)
+  ban_reason String?
   telegramName String?
   messages Message[]
   createdAt  DateTime @default(now())

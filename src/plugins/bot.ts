@@ -2,7 +2,6 @@ import fp from 'fastify-plugin';
 import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
 import { options } from '../app';
-import { FastifyRegisterOptions } from 'fastify';
 import { User } from '@prisma/client';
 import * as crypto from 'node:crypto';
 import { Update } from 'telegraf/typings/core/types/typegram';
@@ -12,18 +11,22 @@ import { Update } from 'telegraf/typings/core/types/typegram';
  *
  * @see later
  */
-export default fp<
-  FastifyRegisterOptions<{
-    telegramToken: string;
-    webhookDomain: string;
-    testTelegramToken: string;
-    telegramBotPort: string;
-  }>
->(async fastify => {
+export default fp(async fastify => {
   fastify.register(async (fastify, opts, done) => {
-    let bot: Telegraf;
-    if (process.env.NODE_ENV == 'prod') bot = new Telegraf(opts.telegramToken);
-    else bot = new Telegraf(opts.testTelegramToken);
+    const bot = new Telegraf(process.env.NODE_ENV == 'prod' ? opts.telegramToken : opts.testTelegramToken);
+
+    bot.use(async (ctx, next) => {
+      const telegramId = ctx?.message?.from.id;
+      if (!telegramId) return next();
+      const candidate = await fastify.prisma.user.findFirst({
+        where: { telegramId: ctx.message.from.id },
+        select: { banned: true, ban_reason: true },
+      });
+      const member = await bot.telegram.getChatMember(opts.telegramBotChannelUsername, telegramId);
+      ctx.subscribedToChannel = ['member', 'administrator', 'creator'].includes(member.status);
+      if (candidate?.banned) return ctx.reply(`Нет доступа. Причина: ${candidate.ban_reason}`);
+      next();
+    });
 
     bot.command('start', async ctx => {
       const telegramId = ctx.message?.from?.id;
@@ -62,44 +65,64 @@ export default fp<
     });
 
     bot.catch((err, ctx) => {
-      fastify.log.error(`Ooops, произошла ошибка для пользователя ${ctx.message?.from.id}`, err);
+      fastify.log.error(`Ooops, произошла ошибка для пользователя ${ctx.message?.from.id} - ${err}`);
       ctx.reply('Ooops, произошла ошибка!');
     });
 
     bot.command('genimg', async ctx => {
+      ctx.sendChatAction('upload_photo');
+
       const text = ctx.message.text.trim();
+      const command = '/genimg';
+
       const candidate = await fastify.prisma.user.findFirst({
         where: { telegramId: ctx.message.from.id },
         include: { rooms: true },
       });
+
       if (!candidate) return ctx.reply('Запустите бота командой /start и отправьте сообщение повторно');
-      const command = '/genimg';
-      await ctx.sendChatAction('upload_photo');
+      if (candidate.banned) return ctx.reply(`Нет доступа. Причина: ${candidate.ban_reason}`);
+
       const imgUrl = await fastify.generateChatGptImage(text.slice(command.length + 1));
       fastify.log.info(
-        `Сгенерировано новое изображение от <${candidate.telegramName}>: <${candidate.id}> - <${imgUrl}>`
+        `Сгенерировано новое изображение от <${candidate?.telegramName}>: <${candidate?.id}> - <${imgUrl}>`
       );
       ctx.replyWithPhoto(imgUrl);
     });
 
     bot.on(message('text'), async ctx => {
+      ctx.sendChatAction('typing');
+
+      if (!ctx.subscribedToChannel) {
+        return ctx.reply('Чтобы пользоваться ботом, пожалуйста, подпишитесь на новостной канал - это бесплатно!', {
+          reply_markup: {
+            inline_keyboard: [[{ text: 'Подписаться', url: opts.telegramBotChannelInviteLink }]],
+          },
+        });
+      }
+
       const candidate = await fastify.prisma.user.findFirst({
         where: { telegramId: ctx.message.from.id },
         include: { rooms: true },
       });
+
       if (!candidate) return ctx.reply('Запустите бота командой /start и отправьте сообщение повторно');
-      await ctx.sendChatAction('typing');
 
       const assistant = (await fastify.prisma.user.findFirst({
         where: { roles: { every: { key: 'assistant' } } },
       })) as User; // тут помощник точно есть, тк он создается при команде start
-      const roomId = candidate.rooms[0].id;
+      let roomId = candidate.rooms?.[0]?.id;
+      if (!roomId) {
+        const room = await fastify.prisma.room.create({
+          data: { users: { connect: [{ id: candidate.id }, { id: assistant.id }] } },
+        });
+        roomId = room.id;
+      }
       const newMsg = ctx.message.text.trim();
       const messages = await fastify.prisma.message.findMany({
         where: { roomId },
         include: { user: { include: { roles: true } } },
         orderBy: { createdAt: 'desc' },
-
         take: 20,
       });
 
@@ -141,3 +164,9 @@ export default fp<
     done();
   }, options.custom.telegramBot);
 });
+
+declare module 'telegraf' {
+  export interface Context {
+    subscribedToChannel: boolean;
+  }
+}
