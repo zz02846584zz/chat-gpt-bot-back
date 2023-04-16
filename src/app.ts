@@ -33,7 +33,16 @@ export type AppOptions = {
 
 const schema = {
   type: 'object',
-  required: ['PORT', 'BOT_TOKEN', 'TEST_BOT_TOKEN', 'NODE_ENV', 'OPENAI_API_KEY', 'TELEGRAM_WEBHOOK_DOMAIN'],
+  required: [
+    'PORT',
+    'BOT_TOKEN',
+    'TEST_BOT_TOKEN',
+    'NODE_ENV',
+    'OPENAI_API_KEY',
+    'TELEGRAM_WEBHOOK_DOMAIN',
+    'TELEGRAM_BOT_CHANNEL_INVITE_LINK',
+    'TELEGRAM_BOT_CHANNEL_USERNAME',
+  ],
   properties: {
     PORT: {
       type: 'number',
