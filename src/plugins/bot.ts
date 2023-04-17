@@ -93,6 +93,7 @@ export default fp(async fastify => {
     });
 
     bot.on(message('text'), async ctx => {
+      const typingMsg = await ctx.sendMessage('Генерирую уникальный ответ...');
       ctx.sendChatAction('typing');
 
       if (!ctx.subscribedToChannel) {
@@ -123,10 +124,12 @@ export default fp(async fastify => {
         const newMsg = ctx.message.text.trim();
         const messages = await fastify.prisma.message.findMany({
           where: { roomId },
-          include: { user: { include: { roles: true } } },
+          include: { user: { select: { roles: true } } },
           orderBy: { createdAt: 'desc' },
-          take: 20,
+          take: 8,
         });
+
+        console.log(messages);
 
         const botReplyMessage = await fastify.sendChatGptMsg(
           messages
@@ -137,14 +140,11 @@ export default fp(async fastify => {
             .concat({ content: newMsg, role: 'user', name: candidate.id })
         );
 
-        await fastify.prisma.message.createMany({
-          data: [
-            { roomId, content: newMsg, userId: candidate.id },
-            { roomId, content: botReplyMessage, userId: assistant.id },
-          ],
-        });
+        await fastify.prisma.message.create({ data: { roomId, content: newMsg, userId: candidate.id } });
+        await fastify.prisma.message.create({ data: { roomId, content: botReplyMessage, userId: assistant.id } });
 
         await ctx.sendMessage(botReplyMessage, { reply_to_message_id: ctx.message.message_id });
+        await ctx.deleteMessage(typingMsg.message_id);
         fastify.log.info(`Новое сообщение от <${candidate.telegramName}>: <${candidate.id}> - <${newMsg}>`);
       } catch (error) {
         fastify.log.error(`Произошла ошибка - <${error}>`);
