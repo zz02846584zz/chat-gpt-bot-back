@@ -129,8 +129,6 @@ export default fp(async fastify => {
           take: 8,
         });
 
-        console.log(messages);
-
         const botReplyMessage = await fastify.sendChatGptMsg(
           messages
             .map(msg => {
